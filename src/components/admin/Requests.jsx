@@ -5,18 +5,21 @@ export default function Requests() {
   const [tab, setTab] = useState('advance')
   const [advances, setAdvances] = useState([])
   const [fuels, setFuels] = useState([])
+  const [leaves, setLeaves] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { fetchAll() }, [])
 
   const fetchAll = async () => {
     setLoading(true)
-    const [a, f] = await Promise.all([
+    const [a, f, l] = await Promise.all([
       supabase.from('advance_requests').select('*').order('created_at', { ascending: false }),
       supabase.from('fuel_requests').select('*').order('created_at', { ascending: false }),
+      supabase.from('leave_requests').select('*').order('created_at', { ascending: false }),
     ])
     setAdvances(a.data || [])
     setFuels(f.data || [])
+    setLeaves(l.data || [])
     setLoading(false)
   }
 
@@ -32,24 +35,30 @@ export default function Requests() {
 
   const pendingAdvance = advances.filter(a => a.status === 'pending').length
   const pendingFuel = fuels.filter(f => f.status === 'pending').length
+  const pendingLeave = leaves.filter(l => l.status === 'pending').length
 
   return (
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-900">Driver Requests</h2>
-        <p className="text-gray-500 text-sm">Review and approve advance and fuel requests</p>
+        <p className="text-gray-500 text-sm">Review and approve advance, fuel, and leave requests</p>
       </div>
 
       <div className="flex gap-3 mb-6">
         <button onClick={() => setTab('advance')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition ${tab === 'advance' ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>
-          💰 Advance Requests
+          💰 Advance
           {pendingAdvance > 0 && <span className="bg-white/30 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingAdvance}</span>}
         </button>
         <button onClick={() => setTab('fuel')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition ${tab === 'fuel' ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>
-          ⛽ Fuel Requests
+          ⛽ Fuel
           {pendingFuel > 0 && <span className="bg-white/30 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingFuel}</span>}
+        </button>
+        <button onClick={() => setTab('leave')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition ${tab === 'leave' ? 'bg-purple-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>
+          🏖️ Leave
+          {pendingLeave > 0 && <span className="bg-white/30 text-white text-xs px-1.5 py-0.5 rounded-full">{pendingLeave}</span>}
         </button>
       </div>
 
@@ -133,6 +142,56 @@ export default function Requests() {
                       Approve
                     </button>
                     <button onClick={() => updateStatus('fuel_requests', req.id, 'rejected')}
+                      className="bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-200">
+                      Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === 'leave' && (
+        <div className="space-y-4">
+          {loading ? <p className="text-gray-400">Loading...</p> :
+           leaves.length === 0 ? (
+            <div className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-12 text-center text-gray-400">No leave requests yet.</div>
+          ) : leaves.map(req => (
+            <div key={req.id} className="bg-white rounded-xl border border-gray-200 p-5 flex items-start justify-between gap-4 hover:shadow-sm transition">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold">
+                    {(req.driver_name || '?').charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{req.driver_name}</p>
+                    <p className="text-gray-400 text-xs">{new Date(req.created_at).toLocaleString('en-IN')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-sm font-semibold text-gray-700">
+                    📅 {req.start_date} → {req.end_date}
+                  </span>
+                  {req.status === 'approved' && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Approved</span>
+                  )}
+                  {req.status === 'rejected' && (
+                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Rejected</span>
+                  )}
+                </div>
+                <p className="text-gray-600 text-sm bg-gray-50 px-3 py-2 rounded-lg">{req.reason}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <StatusBadge status={req.status} />
+                {req.status === 'pending' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => updateStatus('leave_requests', req.id, 'approved')}
+                      className="bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-600">
+                      Approve
+                    </button>
+                    <button onClick={() => updateStatus('leave_requests', req.id, 'rejected')}
                       className="bg-red-100 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-200">
                       Reject
                     </button>

@@ -10,10 +10,11 @@ export default function TripSummary() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
-    trip_id: '', driver_id: '', driver_name: '', contact_number: '',
-    pickup_location: '', drop_location: '', advanced_needed: '',
-    fuel_needed: '', vehicle_number: '', number_of_trips: 1,
-    remarks: '', trip_date: new Date().toISOString().split('T')[0],
+    trip_id: '', pickup_location: '', drop_location: '',
+    advanced_needed: '', fuel_needed: '', vehicle_number: '',
+    number_of_trips: 1, remarks: '', trip_date: new Date().toISOString().split('T')[0],
+    amount_to_collect: '',
+    driver_ids: [],
   })
 
   useEffect(() => { fetchAll() }, [])
@@ -31,35 +32,54 @@ export default function TripSummary() {
     setLoading(false)
   }
 
-  const handleDriverChange = (driverId) => {
-    const d = drivers.find(x => x.id === driverId)
-    setForm(p => ({ ...p, driver_id: driverId, driver_name: d?.driver_name || '', contact_number: d?.contact_number || '' }))
-  }
-
   const generateTripId = () => {
     const d = new Date()
     return `TRIP-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*9000)+1000}`
+  }
+
+  const toggleDriver = (driverId) => {
+    setForm(p => ({
+      ...p,
+      driver_ids: p.driver_ids.includes(driverId)
+        ? p.driver_ids.filter(id => id !== driverId)
+        : [...p.driver_ids, driverId]
+    }))
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
     setError('')
+
+    const selectedDrivers = drivers.filter(d => form.driver_ids.includes(d.id))
+
     const { error } = await supabase.from('trips').insert([{
       ...form,
       trip_id: form.trip_id || generateTripId(),
       advanced_needed: parseFloat(form.advanced_needed) || 0,
       fuel_needed: parseFloat(form.fuel_needed) || 0,
       number_of_trips: parseInt(form.number_of_trips) || 1,
+      amount_to_collect: parseFloat(form.amount_to_collect) || 0,
+      driver_id: form.driver_ids[0] || null,
+      driver_ids: form.driver_ids,
+      driver_name: selectedDrivers.map(d => d.driver_name).join(', '),
+      contact_number: selectedDrivers.map(d => d.contact_number).join(', '),
     }])
+
     if (error) { setError(error.message); setSaving(false); return }
     setShowForm(false)
-    setForm({ trip_id: '', driver_id: '', driver_name: '', contact_number: '',
-      pickup_location: '', drop_location: '', advanced_needed: '', fuel_needed: '',
-      vehicle_number: '', number_of_trips: 1, remarks: '',
-      trip_date: new Date().toISOString().split('T')[0] })
+    setForm({ trip_id: '', pickup_location: '', drop_location: '',
+      advanced_needed: '', fuel_needed: '', vehicle_number: '',
+      number_of_trips: 1, remarks: '', trip_date: new Date().toISOString().split('T')[0],
+      amount_to_collect: '', driver_ids: [] })
     fetchAll()
     setSaving(false)
+  }
+
+  const statusBadge = (trip) => {
+    if (trip.status === 'completed') return 'bg-green-100 text-green-700'
+    if (trip.status === 'in_progress') return 'bg-yellow-100 text-yellow-700'
+    return 'bg-blue-100 text-blue-700'
   }
 
   return (
@@ -80,7 +100,7 @@ export default function TripSummary() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                {['Trip ID','Driver / Contact','Pickup','Drop','Advance (₹)','Fuel (₹)','Vehicle No.','Driver ID','# Trips','Remarks'].map(h => (
+                {['Trip ID','Drivers','Pickup','Drop','Amount (₹)','Advance (₹)','Fuel (₹)','Vehicle','# Trips','Status'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -96,17 +116,23 @@ export default function TripSummary() {
                 <tr key={trip.id} className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
                   <td className="px-4 py-3 font-mono text-blue-600 font-medium text-xs">{trip.trip_id}</td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{trip.driver_name || '—'}</div>
-                    <div className="text-gray-400 text-xs">{trip.contact_number}</div>
+                    <div className="font-medium text-gray-900 text-xs max-w-[120px]">{trip.driver_name || '—'}</div>
+                    {trip.driver_ids?.length > 1 && (
+                      <div className="text-gray-400 text-xs">+{trip.driver_ids.length - 1} more</div>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 max-w-[140px] truncate">{trip.pickup_location}</td>
-                  <td className="px-4 py-3 text-gray-700 max-w-[140px] truncate">{trip.drop_location}</td>
+                  <td className="px-4 py-3 text-gray-700 max-w-[120px] truncate">{trip.pickup_location}</td>
+                  <td className="px-4 py-3 text-gray-700 max-w-[120px] truncate">{trip.drop_location}</td>
+                  <td className="px-4 py-3 font-bold text-orange-600">₹{trip.amount_to_collect || 0}</td>
                   <td className="px-4 py-3 text-gray-700 font-medium">₹{trip.advanced_needed || 0}</td>
                   <td className="px-4 py-3 text-gray-700 font-medium">₹{trip.fuel_needed || 0}</td>
                   <td className="px-4 py-3 text-gray-700">{trip.vehicle_number || '—'}</td>
-                  <td className="px-4 py-3 text-gray-400 font-mono text-xs">{trip.driver_id?.slice(0,8) || '—'}...</td>
                   <td className="px-4 py-3 text-gray-700 text-center">{trip.number_of_trips}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[150px] truncate">{trip.remarks || '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusBadge(trip)}`}>
+                      {trip.status === 'in_progress' ? 'In Progress' : trip.status || 'Assigned'}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -135,22 +161,6 @@ export default function TripSummary() {
                     className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Driver</label>
-                  <select value={form.driver_id} onChange={e => handleDriverChange(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- Select Driver --</option>
-                    {drivers.map(d => <option key={d.id} value={d.id}>{d.driver_name} ({d.contact_number})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Vehicle</label>
-                  <select value={form.vehicle_number} onChange={e => setForm({...form, vehicle_number: e.target.value})}
-                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">-- Select Vehicle --</option>
-                    {vehicles.map(v => <option key={v.id} value={v.vehicle_number}>{v.vehicle_number} ({v.vehicle_id})</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Location *</label>
                   <input type="text" value={form.pickup_location} onChange={e => setForm({...form, pickup_location: e.target.value})}
                     required className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -161,6 +171,20 @@ export default function TripSummary() {
                   <input type="text" value={form.drop_location} onChange={e => setForm({...form, drop_location: e.target.value})}
                     required className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="e.g. Bangalore Depot" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Vehicle</label>
+                  <select value={form.vehicle_number} onChange={e => setForm({...form, vehicle_number: e.target.value})}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">-- Select Vehicle --</option>
+                    {vehicles.map(v => <option key={v.id} value={v.vehicle_number}>{v.vehicle_number} ({v.vehicle_id})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount to Collect (₹)</label>
+                  <input type="number" value={form.amount_to_collect} onChange={e => setForm({...form, amount_to_collect: e.target.value})}
+                    min="0" className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Advance Needed (₹)</label>
@@ -180,9 +204,28 @@ export default function TripSummary() {
                     min="1" className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Assign Drivers * (select one or more)</label>
+                  <div className="border border-gray-300 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2">
+                    {drivers.length === 0 ? (
+                      <p className="text-gray-400 text-sm">No drivers registered. Add drivers first.</p>
+                    ) : drivers.map(d => (
+                      <label key={d.id} className="flex items-center gap-2 cursor-pointer hover:bg-blue-50 p-1.5 rounded-lg">
+                        <input type="checkbox" checked={form.driver_ids.includes(d.id)}
+                          onChange={() => toggleDriver(d.id)}
+                          className="w-4 h-4 text-blue-600 rounded" />
+                        <span className="text-sm font-medium text-gray-800">{d.driver_name}</span>
+                        <span className="text-xs text-gray-400">{d.contact_number}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {form.driver_ids.length > 0 && (
+                    <p className="text-xs text-blue-600 mt-1">{form.driver_ids.length} driver(s) selected</p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
                   <textarea value={form.remarks} onChange={e => setForm({...form, remarks: e.target.value})}
-                    rows={3} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={2} className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Any extra notes about this trip..." />
                 </div>
               </div>
@@ -192,7 +235,7 @@ export default function TripSummary() {
                   className="flex-1 border border-gray-300 text-gray-700 rounded-xl py-3 text-sm font-medium hover:bg-gray-50">
                   Cancel
                 </button>
-                <button type="submit" disabled={saving}
+                <button type="submit" disabled={saving || form.driver_ids.length === 0}
                   className="flex-1 bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold hover:bg-blue-700 disabled:opacity-50">
                   {saving ? 'Saving...' : 'Create Trip'}
                 </button>
