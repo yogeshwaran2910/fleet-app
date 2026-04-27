@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import supabase from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import TripSummary from '../components/admin/TripSummary'
 import Fleet from '../components/admin/Fleet'
 import Reports from '../components/admin/Reports'
